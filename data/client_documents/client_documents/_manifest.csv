@@ -1,0 +1,48 @@
+client_id,client_name,document,file
+CL001,"Rodriguez, Figueroa and Sanchez",Sales invoices/receipts,CL001/sales_invoices_receipts.pdf
+CL001,"Rodriguez, Figueroa and Sanchez",Purchase receipts/invoices,CL001/purchase_receipts_invoices.pdf
+CL001,"Rodriguez, Figueroa and Sanchez",Bank statement,CL001/bank_statement.pdf
+CL001,"Rodriguez, Figueroa and Sanchez",Expense receipts,CL001/expense_receipts.pdf
+CL003,Wolfe LLC,Sales invoices/receipts,CL003/sales_invoices_receipts.pdf
+CL003,Wolfe LLC,Purchase receipts/invoices,CL003/purchase_receipts_invoices.pdf
+CL003,Wolfe LLC,Bank statement,CL003/bank_statement.pdf
+CL003,Wolfe LLC,Expense receipts,CL003/expense_receipts.pdf
+CL006,Wood and Sons,Sales & purchase invoices,CL006/sales___purchase_invoices.pdf
+CL006,Wood and Sons,Bank statements,CL006/bank_statements.pdf
+CL007,Mayo-Bowman,Sales invoices/receipts,CL007/sales_invoices_receipts.pdf
+CL007,Mayo-Bowman,Purchase receipts/invoices,CL007/purchase_receipts_invoices.pdf
+CL008,Adams-Clark,Sales & purchase invoices,CL008/sales___purchase_invoices.pdf
+CL008,Adams-Clark,Bank statements,CL008/bank_statements.pdf
+CL008,Adams-Clark,Payroll register + CPF,CL008/payroll_register___cpf.pdf
+CL008,Adams-Clark,Supplier invoices,CL008/supplier_invoices.pdf
+CL009,"Baker, Richards and Hurst",Sales invoices,CL009/sales_invoices.pdf
+CL009,"Baker, Richards and Hurst",Bank statements,CL009/bank_statements.pdf
+CL011,"Dyer, Potter and Mack",Sales & purchase invoices,CL011/sales___purchase_invoices.pdf
+CL011,"Dyer, Potter and Mack",Bank statements (all accounts),CL011/bank_statements__all_accounts.pdf
+CL011,"Dyer, Potter and Mack",Payroll register + CPF,CL011/payroll_register___cpf.pdf
+CL013,"Sellers, George and Burns",Sales invoices/receipts,CL013/sales_invoices_receipts.pdf
+CL013,"Sellers, George and Burns",Purchase receipts/invoices,CL013/purchase_receipts_invoices.pdf
+CL013,"Sellers, George and Burns",Bank statement,CL013/bank_statement.pdf
+CL013,"Sellers, George and Burns",Expense receipts,CL013/expense_receipts.pdf
+CL013,"Sellers, George and Burns",Capital contribution/drawing records,CL013/capital_contribution_drawing_records.pdf
+CL015,Baker PLC,Sales & purchase invoices,CL015/sales___purchase_invoices.pdf
+CL015,Baker PLC,Bank statements,CL015/bank_statements.pdf
+CL015,Baker PLC,Payroll register + CPF,CL015/payroll_register___cpf.pdf
+CL015,Baker PLC,Supplier invoices,CL015/supplier_invoices.pdf
+CL015,Baker PLC,POS daily sales summary,CL015/pos_daily_sales_summary.pdf
+CL015,Baker PLC,Month-end stock count,CL015/month_end_stock_count.pdf
+CL016,Lam-Hayes,Sales & purchase invoices,CL016/sales___purchase_invoices.pdf
+CL016,Lam-Hayes,Bank statements,CL016/bank_statements.pdf
+CL016,Lam-Hayes,Payroll register + CPF,CL016/payroll_register___cpf.pdf
+CL016,Lam-Hayes,Supplier invoices,CL016/supplier_invoices.pdf
+CL017,Jones Inc,Sales invoices,CL017/sales_invoices.pdf
+CL017,Jones Inc,Bank statements,CL017/bank_statements.pdf
+CL017,Jones Inc,Contractor invoices,CL017/contractor_invoices.pdf
+CL018,"Kennedy, Mueller and Aguirre",Sales invoices/receipts,CL018/sales_invoices_receipts.pdf
+CL019,"Valdez, Lucas and Brown",Sales invoices/receipts,CL019/sales_invoices_receipts.pdf
+CL019,"Valdez, Lucas and Brown",Purchase receipts/invoices,CL019/purchase_receipts_invoices.pdf
+CL019,"Valdez, Lucas and Brown",Bank statement,CL019/bank_statement.pdf
+CL019,"Valdez, Lucas and Brown",Expense receipts,CL019/expense_receipts.pdf
+CL020,White-Ford,Sales invoices/receipts,CL020/sales_invoices_receipts.pdf
+CL020,White-Ford,Purchase receipts/invoices,CL020/purchase_receipts_invoices.pdf
+CL020,White-Ford,Bank statement,CL020/bank_statement.pdf

@@ -1,0 +1,35 @@
+# Environment variables & secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Kiro — keep .kiro/specs and .kiro/steering tracked (that's your versioned spec history),
+# only ignore transient/cache output if it shows up
+.kiro/cache/
+.kiro/*.log
+
+# Logs
+*.log
