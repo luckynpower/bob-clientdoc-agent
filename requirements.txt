@@ -1,0 +1,4 @@
+# Phase 2 — Tracking + Reminder Loop
+libsql-client>=0.3.1     # Turso (libSQL) client
+pdfplumber>=0.11.0       # plain-text PDF extraction (no OCR)
+python-dotenv>=1.0.1     # load credentials from .env

@@ -1,0 +1,4 @@
+# .kiroignore
+.env
+*.pem
+*.key

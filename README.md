@@ -39,8 +39,52 @@ An agent-driven assistant that tracks each client's required-document checklist 
 ## Progress
 
 - [x] **Week 1** — Document checklist per client type, 20 synthetic client records, sample documents, account-manager persona and escalation rules (`docs/week1_notes.md`)
-- [ ] **Week 2** — Tracking + reminder loop, completeness checker, OpenClaw orchestration
+- [x] **Week 2 (Phase 2)** — Tracking + reminder loop, tier decision logic, completeness checker, Turso persistence, guardrails (`src/`, `run_cycle.py`)
 - [ ] **Week 3** — Account-manager dashboard, escalation history/audit trail, human review handoff
+
+## Phase 2 — Tracking + Reminder Loop
+
+The core agentic loop lives in `src/` and is driven by `run_cycle.py`.
+
+```
+src/
+├── config.py         # paths + .env (Turso) credential loading
+├── storage.py        # Turso (libSQL): clients, documents, reminder_log, review_queue
+├── clients.py        # load_clients() — read synthetic_clients.csv, upsert into Turso
+├── tiers.py          # get_tier() — pure function, thresholds from week1_notes.md
+├── completeness.py   # check_completeness() — pdfplumber (no OCR); submitted/missing/ambiguous
+├── reminders.py      # draft_reminder() — STUB (Tiers 0-2 templates, None for Tier 3)
+└── agent.py          # run_cycle() / process_client() — orchestration + guardrails
+```
+
+### Run it
+
+```
+pip install -r requirements.txt
+# ensure TURSO_DATABASE_URL and TURSO_AUTH_TOKEN are set in .env
+python run_cycle.py            # runs the loop over all 20 clients + prints a verification table
+python -m tests.test_guardrails   # unit checks for tier logic + both hard guardrails
+```
+
+### Guardrails (enforced in code, not just prompt)
+
+- **Tier 3 never gets a client-facing message.** `draft_reminder()` hard-returns
+  `None` for Tier 3, and `run_cycle()` routes Tier-3 clients to `review_queue`
+  (`tier_3_escalation`) as a dedicated code branch.
+- **Any ambiguous document routes to `review_queue` regardless of tier.** A
+  submitted PDF that yields no extractable text is treated as unverifiable
+  (no OCR this phase) and never triggers an auto-message.
+- **Sending is stubbed** — the "send" step is a log line only; no real
+  email/WhatsApp is dispatched.
+
+### Notes on the data model
+
+- The GST input/output summary is a *derived* tax figure, not a client-uploaded
+  file. It is tracked as a required line item (`not_tracked` status) but excluded
+  from the submitted/missing file comparison, matching the CSV's own
+  `missing_documents` ground truth.
+- `draft_reminder()` is the single seam for a later real Bedrock/Claude call —
+  swapping in an LLM only touches that one function.
 
 ## Setup
 

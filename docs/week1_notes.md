@@ -20,6 +20,7 @@
 | Retail / Trading (holds inventory) | Everything under Pte Ltd, plus supplier invoices, POS daily sales summary, month-end stock count |
 | Service-based Business (no inventory) | Sales invoices; bank statements; contractor invoices (if any); business expense receipts |
 | GST-registered (any type above) | Add: GST input/output tax summary |
+> **Note:** for GST-registered clients, the GST input/output summary is a required line item that the firm derives from submitted invoices/receipts — it is not a client-uploaded file and is therefore tracked separately (status: `not_tracked`) rather than counted in missing-document checks.
 
 ## 2. Synthetic Client Dataset
 
