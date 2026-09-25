@@ -200,3 +200,109 @@ class Storage:
     def count(self, table: str) -> int:
         rs = self.execute(f"SELECT COUNT(*) FROM {table}")
         return int(rs.rows[0][0])
+
+    # -- Phase 3 dashboard readers (additive; read-only over Phase 2 data) ---
+    def list_clients_overview(self) -> list[dict]:
+        """One row per client with live state + outstanding-document counts.
+
+        Reads clients + documents only. Tier is intentionally NOT computed
+        here — the dashboard layer derives it via src.tiers.get_tier so the
+        threshold logic stays in one place.
+        """
+        rs = self.execute(
+            """
+            SELECT
+                c.client_id,
+                c.client_name,
+                c.client_type,
+                c.submission_status,
+                c.days_since_first_request,
+                c.reminders_sent,
+                c.last_contact_channel,
+                COALESCE(SUM(CASE WHEN d.status = 'missing'   THEN 1 ELSE 0 END), 0) AS missing_count,
+                COALESCE(SUM(CASE WHEN d.status = 'ambiguous' THEN 1 ELSE 0 END), 0) AS ambiguous_count
+            FROM clients c
+            LEFT JOIN documents d ON d.client_id = c.client_id
+            GROUP BY c.client_id
+            ORDER BY c.client_id
+            """
+        )
+        cols = [
+            "client_id",
+            "client_name",
+            "client_type",
+            "submission_status",
+            "days_since_first_request",
+            "reminders_sent",
+            "last_contact_channel",
+            "missing_count",
+            "ambiguous_count",
+        ]
+        return [dict(zip(cols, row)) for row in rs.rows]
+
+    def get_client(self, client_id: str) -> Optional[dict]:
+        """Single client's basic record, or None if unknown."""
+        rs = self.execute(
+            "SELECT client_id, client_name, client_type, submission_status,"
+            " days_since_first_request, reminders_sent, last_contact_channel"
+            " FROM clients WHERE client_id = ?",
+            [client_id],
+        )
+        if not rs.rows:
+            return None
+        cols = [
+            "client_id",
+            "client_name",
+            "client_type",
+            "submission_status",
+            "days_since_first_request",
+            "reminders_sent",
+            "last_contact_channel",
+        ]
+        return dict(zip(cols, rs.rows[0]))
+
+    def get_reminder_history(self, client_id: str) -> list[dict]:
+        """Chronological reminder_log entries for one client (oldest first)."""
+        rs = self.execute(
+            "SELECT id, client_id, tier, message_text, timestamp"
+            " FROM reminder_log WHERE client_id = ?"
+            " ORDER BY timestamp ASC, id ASC",
+            [client_id],
+        )
+        cols = ["id", "client_id", "tier", "message_text", "timestamp"]
+        return [dict(zip(cols, row)) for row in rs.rows]
+
+    def get_open_review_queue(self) -> list[dict]:
+        """Unresolved review_queue rows joined with the client name."""
+        rs = self.execute(
+            """
+            SELECT rq.id, rq.client_id, c.client_name, rq.reason, rq.created_at
+            FROM review_queue rq
+            LEFT JOIN clients c ON c.client_id = rq.client_id
+            WHERE rq.resolved = 0
+            ORDER BY rq.created_at ASC, rq.id ASC
+            """
+        )
+        cols = ["id", "client_id", "client_name", "reason", "created_at"]
+        return [dict(zip(cols, row)) for row in rs.rows]
+
+    def resolve_review_item(self, review_id: int) -> bool:
+        """Mark a single review_queue row resolved. Returns True if it was open.
+
+        This is the ONLY write the dashboard performs, and it touches only
+        the `resolved` flag.
+        """
+        rs = self.execute(
+            "SELECT resolved FROM review_queue WHERE id = ?", [review_id]
+        )
+        if not rs.rows:
+            return False
+        already_resolved = int(rs.rows[0][0]) == 1
+        self.execute(
+            "UPDATE review_queue SET resolved = 1 WHERE id = ?", [review_id]
+        )
+        return not already_resolved
+
+    def count_open_review_queue(self) -> int:
+        rs = self.execute("SELECT COUNT(*) FROM review_queue WHERE resolved = 0")
+        return int(rs.rows[0][0])

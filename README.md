@@ -40,7 +40,56 @@ An agent-driven assistant that tracks each client's required-document checklist 
 
 - [x] **Week 1** — Document checklist per client type, 20 synthetic client records, sample documents, account-manager persona and escalation rules (`docs/week1_notes.md`)
 - [x] **Week 2 (Phase 2)** — Tracking + reminder loop, tier decision logic, completeness checker, Turso persistence, guardrails (`src/`, `run_cycle.py`)
-- [ ] **Week 3** — Account-manager dashboard, escalation history/audit trail, human review handoff
+- [x] **Week 3 (Phase 3)** — Account-manager dashboard: client overview, escalation history/audit trail, review queue + human handoff (`dashboard/`)
+
+## Phase 3 — Account Manager Dashboard
+
+A read-mostly Flask dashboard that gives Priya visibility into every client,
+the reminder/escalation history, and the review queue — reading the same
+Turso database Phase 2 populates. It is an independent consumer of that data
+and never runs the agent loop, so it works the same whether the data was
+written by the standalone script or a later OpenClaw-hosted agent.
+
+```
+dashboard/
+├── app.py                 # Flask routes
+├── check_resolve.py       # manual check for the resolve flow
+├── templates/             # base, overview, history, review_queue (Jinja2)
+└── static/style.css
+```
+
+### Run it
+
+```
+pip install -r requirements.txt
+python run_cycle.py            # (if not already) populate Turso with Phase 2 data
+python -m dashboard.app        # serves http://127.0.0.1:5000
+```
+
+Routes:
+- `GET /` — client overview (id, name, type, live tier, status, missing/ambiguous counts); clients needing attention sorted to the top
+- `GET /client/<client_id>/history` — that client's full reminder log, chronological
+- `GET /review-queue` — open (`resolved = false`) review items with client name + reason
+- `POST /review-queue/<id>/resolve` — marks one item resolved, then redirects
+
+### Verify the resolve flow
+
+```
+python -m dashboard.check_resolve
+```
+
+Prints the open queue before and after resolving one item, confirms the
+count drops by one and stays consistent on reload, then restores the item.
+
+### Design notes
+
+- The dashboard reuses `src/storage.py` (no second Turso connection module).
+  Phase 3 only *added* read helpers plus a single `resolve_review_item`
+  write — no Phase 2 function was modified and no new table was created.
+- Tier is computed in the dashboard via `src.tiers.get_tier`, so the
+  threshold logic stays in one place rather than being duplicated in SQL.
+- The only write the dashboard ever performs is flipping
+  `review_queue.resolved`; every other table is read-only from here.
 
 ## Phase 2 — Tracking + Reminder Loop
 

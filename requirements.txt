@@ -2,3 +2,6 @@
 libsql-client>=0.3.1     # Turso (libSQL) client
 pdfplumber>=0.11.0       # plain-text PDF extraction (no OCR)
 python-dotenv>=1.0.1     # load credentials from .env
+
+# Phase 3 — Account Manager Dashboard
+Flask>=3.0.0             # server-rendered dashboard (Jinja2 ships with Flask)
