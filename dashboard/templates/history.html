@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}{{ client.client_id }} history — Maple &amp; Co{% endblock %}
+
+{% block content %}
+<p><a href="{{ url_for('overview') }}">&larr; Back to overview</a></p>
+
+<h1>Reminder History — {{ client.client_name }}</h1>
+<p class="subtitle">
+  <span class="mono">{{ client.client_id }}</span> · {{ client.client_type }} ·
+  current status: {{ client.submission_status }} ·
+  {{ client.reminders_sent }} reminder(s) recorded on the client record
+</p>
+
+{% if entries %}
+<table class="grid">
+  <thead>
+    <tr>
+      <th scope="col">When</th>
+      <th scope="col">Tier</th>
+      <th scope="col">Message sent (logged, not delivered)</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for e in entries %}
+    <tr>
+      <td class="mono nowrap">{{ e.timestamp }}</td>
+      <td><span class="tier tier-{{ e.tier }}">Tier {{ e.tier }}</span></td>
+      <td class="message">{{ e.message_text }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty">No reminders have been logged for this client yet.</p>
+{% endif %}
+{% endblock %}

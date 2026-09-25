@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Maple &amp; Co — Document Collection{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">Maple &amp; Co Bookkeeping</div>
+    <nav aria-label="Primary">
+      <a href="{{ url_for('overview') }}">Client Overview</a>
+      <a href="{{ url_for('review_queue') }}">Review Queue</a>
+    </nav>
+  </header>
+
+  <main class="content">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="footer">
+    Account Manager Dashboard · reads live state from Turso · reminders are logged, not sent
+  </footer>
+</body>
+</html>

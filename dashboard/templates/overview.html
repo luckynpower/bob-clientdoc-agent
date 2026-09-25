@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Client Overview — Maple &amp; Co{% endblock %}
+
+{% block content %}
+<h1>Client Overview</h1>
+<p class="subtitle">
+  {{ clients | length }} clients · live tier and document status pulled from Turso.
+  Clients needing attention are sorted to the top.
+</p>
+
+<table class="grid">
+  <thead>
+    <tr>
+      <th scope="col">Client</th>
+      <th scope="col">Name</th>
+      <th scope="col">Type</th>
+      <th scope="col">Tier</th>
+      <th scope="col">Status</th>
+      <th scope="col" class="num">Missing</th>
+      <th scope="col" class="num">Ambiguous</th>
+      <th scope="col" class="num">Days</th>
+      <th scope="col" class="num">Reminders</th>
+      <th scope="col">History</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for c in clients %}
+    <tr class="{{ 'attention' if c.needs_attention else '' }}">
+      <td class="mono">{{ c.client_id }}</td>
+      <td>{{ c.client_name }}</td>
+      <td>{{ c.client_type }}</td>
+      <td>
+        <span class="tier tier-{{ c.tier }}">Tier {{ c.tier }}</span>
+      </td>
+      <td>{{ c.submission_status }}</td>
+      <td class="num">{{ c.missing_count }}</td>
+      <td class="num">
+        {% if c.ambiguous_count %}
+          <span class="ambiguous-flag">{{ c.ambiguous_count }}</span>
+        {% else %}0{% endif %}
+      </td>
+      <td class="num">{{ c.days_since_first_request }}</td>
+      <td class="num">{{ c.reminders_sent }}</td>
+      <td><a href="{{ url_for('history', client_id=c.client_id) }}">View</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

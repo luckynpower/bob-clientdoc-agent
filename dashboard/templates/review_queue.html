@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Review Queue — Maple &amp; Co{% endblock %}
+
+{% block content %}
+<h1>Review Queue</h1>
+<p class="subtitle">
+  {{ items | length }} open item(s) flagged for your manual follow-up.
+  The agent does not contact these clients on its own.
+</p>
+
+{% if items %}
+<table class="grid">
+  <thead>
+    <tr>
+      <th scope="col">Client</th>
+      <th scope="col">Name</th>
+      <th scope="col">Reason</th>
+      <th scope="col">Flagged</th>
+      <th scope="col">History</th>
+      <th scope="col">Action</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for it in items %}
+    <tr>
+      <td class="mono">{{ it.client_id }}</td>
+      <td>{{ it.client_name or "(unknown)" }}</td>
+      <td>{{ it.reason_label }}</td>
+      <td class="mono nowrap">{{ it.created_at }}</td>
+      <td><a href="{{ url_for('history', client_id=it.client_id) }}">View</a></td>
+      <td>
+        <form method="post"
+              action="{{ url_for('resolve', review_id=it.id) }}">
+          <button type="submit" class="btn-resolve">Mark resolved</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty">Nothing awaiting review. Every flagged case has been resolved.</p>
+{% endif %}
+{% endblock %}
