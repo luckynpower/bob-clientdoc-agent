@@ -9,87 +9,53 @@
 
 ## What This Project Does
 
-An agent-driven assistant that tracks each client's required-document checklist for the monthly close, sends reminders that escalate in tone and frequency the longer a client stays unresponsive, checks incoming submissions for completeness, and flags missing or ambiguous items automatically. Account managers get a real-time view of who's outstanding — the agent only escalates to a human when a client is unresponsive past a set threshold or submits something it can't confidently classify.
+An agent-driven assistant that tracks each client's required-document checklist for the monthly close, drafts reminders that escalate in tone the longer a client stays unresponsive, checks submissions for completeness, and flags missing or ambiguous items automatically. Account managers get a dashboard view of who's outstanding and a human review queue — the agent only escalates to a human when a client is unresponsive past a set threshold or submits something it can't confidently classify. All tier and escalation decisions are made by deterministic Python; the LLM only drafts reminder wording.
 
 ## Tech Stack
 
-| Layer | Tool |
-|---|---|
-| Development environment | Kiro (spec-driven IDE) |
-| Agent orchestration | OpenClaw |
-| Hosting / deployment | AWS Lightsail |
-| Model | AWS Bedrock (Claude) via the hackathon LLM gateway |
+| Layer | Tool | Status |
+|---|---|---|
+| Development environment | Kiro (spec-driven IDE) | in use |
+| Language / runtime | Python 3 | in use |
+| Persistence | Turso (libSQL) via `libsql-client` | in use |
+| PDF parsing | pdfplumber (text extraction, no OCR) | in use |
+| Reminder drafting | LLM gateway (Bedrock/Claude proxy) with template fallback | in use |
+| Dashboard | Flask + Jinja2 (server-rendered) | in use |
+| Agent orchestration | OpenClaw | planned — not yet wired in code |
+| Hosting / deployment | AWS Lightsail | planned — not yet wired in code |
 
 ## Repository Structure
 
 ```
-├── .gitignore
-├── .env.example          # copy to .env and fill in real credentials (never commit .env)
-├── README.md              # this file
+├── .env.example              # copy to .env and fill in credentials (never commit .env)
+├── .gitignore / .kiroignore  # ignore .env, keys, caches
+├── requirements.txt          # libsql-client, pdfplumber, python-dotenv, Flask
+├── README.md                 # this file
 ├── data/
-│   ├── synthetic_clients.csv       # 20 anonymised sample client records
-│   └── client_documents/           # matching sample invoices/receipts/statements
-│       └── _manifest.csv
+│   ├── synthetic_clients.csv                     # 20 anonymised sample client records
+│   └── client_documents/client_documents/        # sample PDFs, one folder per client
+│       └── _manifest.csv                          # maps each file to its client + doc type
 ├── docs/
-│   └── week1_notes.md    # checklist, persona, escalation rules, assumptions
-├── src/                    # agent code (Week 2 onward)
-└── tests/                  # tests (Week 2 onward)
+│   ├── week1_notes.md            # checklist, persona, escalation rules, assumptions
+│   ├── week2_notes.md            # tracking + reminder loop decisions
+│   └── phase2_code_overview.md   # developer map of the agent
+├── src/                      # the agent (see Phase 2 below)
+├── dashboard/                # Flask account-manager dashboard (see Phase 3 below)
+└── tests/                    # hermetic test suites (no live Turso / network)
 ```
 
 ## Progress
 
 - [x] **Week 1** — Document checklist per client type, 20 synthetic client records, sample documents, account-manager persona and escalation rules (`docs/week1_notes.md`)
-- [x] **Week 2 (Phase 2)** — Tracking + reminder loop, tier decision logic, completeness checker, Turso persistence, guardrails (`src/`, `run_cycle.py`)
-- [x] **Week 3 (Phase 3)** — Account-manager dashboard: client overview, escalation history/audit trail, review queue + human handoff (`dashboard/`)
+- [x] **Week 2 (Phase 2)** — Tracking + reminder loop, tier decision logic, completeness checker, LLM-drafted reminders with fallback, Turso persistence, guardrails (`src/`, `run_cycle.py`)
+- [x] **Week 3 (Phase 3)** — Account-manager dashboard: client overview, merged escalation-history/audit trail, review queue with approve/dismiss, Basic auth + CSRF (`dashboard/`)
 
-## Phase 3 — Account Manager Dashboard
+## Setup
 
-A read-mostly Flask dashboard that gives Priya visibility into every client,
-the reminder/escalation history, and the review queue — reading the same
-Turso database Phase 2 populates. It is an independent consumer of that data
-and never runs the agent loop, so it works the same whether the data was
-written by the standalone script or a later OpenClaw-hosted agent.
-
-```
-dashboard/
-├── app.py                 # Flask routes
-├── check_resolve.py       # manual check for the resolve flow
-├── templates/             # base, overview, history, review_queue (Jinja2)
-└── static/style.css
-```
-
-### Run it
-
-```
-pip install -r requirements.txt
-python run_cycle.py            # (if not already) populate Turso with Phase 2 data
-python -m dashboard.app        # serves http://127.0.0.1:5000
-```
-
-Routes:
-- `GET /` — client overview (id, name, type, live tier, status, missing/ambiguous counts); clients needing attention sorted to the top
-- `GET /client/<client_id>/history` — that client's full reminder log, chronological
-- `GET /review-queue` — open (`resolved = false`) review items with client name + reason
-- `POST /review-queue/<id>/resolve` — marks one item resolved, then redirects
-
-### Verify the resolve flow
-
-```
-python -m dashboard.check_resolve
-```
-
-Prints the open queue before and after resolving one item, confirms the
-count drops by one and stays consistent on reload, then restores the item.
-
-### Design notes
-
-- The dashboard reuses `src/storage.py` (no second Turso connection module).
-  Phase 3 only *added* read helpers plus a single `resolve_review_item`
-  write — no Phase 2 function was modified and no new table was created.
-- Tier is computed in the dashboard via `src.tiers.get_tier`, so the
-  threshold logic stays in one place rather than being duplicated in SQL.
-- The only write the dashboard ever performs is flipping
-  `review_queue.resolved`; every other table is read-only from here.
+1. Clone the repo and `cd` into it.
+2. `pip install -r requirements.txt`
+3. Copy `.env.example` to `.env` and fill in the credentials (see [Environment variables](#environment-variables)). **Never commit `.env`** — it is git- and Kiro-ignored.
+4. See `docs/week1_notes.md` for the checklist and escalation rules this build follows.
 
 ## Phase 2 — Tracking + Reminder Loop
 
@@ -97,59 +63,138 @@ The core agentic loop lives in `src/` and is driven by `run_cycle.py`.
 
 ```
 src/
-├── config.py         # paths + .env (Turso) credential loading
+├── config.py         # .env + path loading (Turso, LLM gateway, dashboard auth)
 ├── storage.py        # Turso (libSQL): clients, documents, reminder_log, review_queue
 ├── clients.py        # load_clients() — read synthetic_clients.csv, upsert into Turso
-├── tiers.py          # get_tier() — pure function, thresholds from week1_notes.md
-├── completeness.py   # check_completeness() — pdfplumber (no OCR); submitted/missing/ambiguous
-├── reminders.py      # draft_reminder() — STUB (Tiers 0-2 templates, None for Tier 3)
-└── agent.py          # run_cycle() / process_client() — orchestration + guardrails
+├── tiers.py          # get_tier() — pure deterministic function, thresholds from week1_notes.md
+├── completeness.py   # check_completeness() — pdfplumber text-presence check (no OCR)
+├── reminders.py      # draft_reminder() — LLM gateway with per-tier template fallback
+└── agent.py          # run_cycle() / process_client() — ordered stages + guardrails
+```
+
+`run_cycle()` runs one ordered pass per client: **intake → text extraction + completeness → update checklist → decide tier → decide action**. Tier is computed *after* completeness, by deterministic Python only.
+
+### Run it
+
+```
+# ensure TURSO_DATABASE_URL and TURSO_AUTH_TOKEN are set in .env
+python run_cycle.py            # human summary + CSV verification table
+python run_cycle.py --json     # one JSON object per client on stdout (logs to stderr)
+```
+
+Each `--json` line: `{client_id, missing_docs, tier, action, reason}` where `action` is `none` / `remind` / `escalate_to_human`.
+
+### Guardrails (enforced in code, not just prompt)
+
+- **Tier 3 never gets a client-facing message.** `draft_reminder()` returns no text for Tier 3, and `process_client()` routes Tier-3 clients to `review_queue` (`tier_3_escalation`).
+- **Complete clients are never reminded or escalated**, even if elapsed days would put them at Tier 3.
+- **Any ambiguous document routes to `review_queue` regardless of tier.** A PDF that yields no extractable text is treated as unverifiable (no OCR) and never triggers an auto-message.
+- **A client with an open review item is not reminded** while it awaits a human decision.
+- **Reminders are deduped per `(client_id, tier)`** (`log_reminder_once`), and a re-run makes zero gateway calls for an already-reminded client.
+- **Sending is stubbed** — `_send_stub()` logs a line; no real email/WhatsApp is dispatched.
+
+### Deterministic vs LLM
+
+The LLM (via `reminders.draft_reminder` → the gateway) drafts reminder *wording only*, and is sent only the client name, tier, and missing-item list. Tier assignment, whether to remind/escalate, completeness, and review routing are all deterministic and never read LLM output. On any gateway failure the code falls back to a per-tier template and records `source = "template_fallback"` (vs `"llm"`) in `reminder_log`.
+
+### Notes on the data model
+
+- The GST input/output summary is a *derived* tax figure, not a client-uploaded file. It is tracked as a required line item (`not_tracked`) but excluded from the missing/submitted comparison, matching the CSV's ground truth.
+
+## Phase 3 — Account Manager Dashboard
+
+A read-mostly Flask dashboard over the same Turso database Phase 2 populates. It never runs the agent loop, so it works the same whether the data was written by the standalone script or a future OpenClaw-hosted agent.
+
+```
+dashboard/
+├── app.py            # Flask routes, Basic auth, CSRF
+├── check_decide.py   # manual check for the approve/dismiss flow
+├── templates/        # base, overview, history (merged timeline), review_queue (Jinja2)
+└── static/style.css
 ```
 
 ### Run it
 
 ```
-pip install -r requirements.txt
-# ensure TURSO_DATABASE_URL and TURSO_AUTH_TOKEN are set in .env
-python run_cycle.py            # runs the loop over all 20 clients + prints a verification table
-python -m tests.test_guardrails   # unit checks for tier logic + both hard guardrails
+# set DASHBOARD_USER + DASHBOARD_AUTH_TOKEN (+ DASHBOARD_SECRET_KEY) in .env first
+python run_cycle.py            # (if needed) populate Turso with Phase 2 data
+python -m dashboard.app        # serves http://127.0.0.1:5000
 ```
 
-### Guardrails (enforced in code, not just prompt)
+The **entire dashboard is gated by HTTP Basic auth**. Log in with `DASHBOARD_USER` as the username and `DASHBOARD_AUTH_TOKEN` as the password. If the token is unset the app returns HTTP 500 rather than serving anything unprotected.
 
-- **Tier 3 never gets a client-facing message.** `draft_reminder()` hard-returns
-  `None` for Tier 3, and `run_cycle()` routes Tier-3 clients to `review_queue`
-  (`tier_3_escalation`) as a dedicated code branch.
-- **Any ambiguous document routes to `review_queue` regardless of tier.** A
-  submitted PDF that yields no extractable text is treated as unverifiable
-  (no OCR this phase) and never triggers an auto-message.
-- **Sending is stubbed** — the "send" step is a log line only; no real
-  email/WhatsApp is dispatched.
+Routes:
+- `GET /` — client overview (id, name, type, live tier, status, missing/ambiguous counts); clients needing attention sorted to the top.
+- `GET /client/<client_id>/history` — merged per-client audit timeline of reminders (with `source`) and review events (Tier 3 escalations / ambiguous documents), newest first, with decision + note + who/when.
+- `GET /review-queue` — open (undecided) review items with client name and reason.
+- `POST /review-queue/<id>/decide` — approve or dismiss one open item (`decision` = `approved`/`dismissed`, optional `note`). CSRF-protected. Rejects a second decision (409).
 
-### Notes on the data model
+### Human-in-the-loop
 
-- The GST input/output summary is a *derived* tax figure, not a client-uploaded
-  file. It is tracked as a required line item (`not_tracked` status) but excluded
-  from the submitted/missing file comparison, matching the CSV's own
-  `missing_documents` ground truth.
-- `draft_reminder()` is the single seam for a later real Bedrock/Claude call —
-  swapping in an LLM only touches that one function.
+- **Approve** = the manager confirms the flag and takes the case over. **Dismiss** = judged a false alarm. Both record `decision`, `note`, `decided_at`, `decided_by` and close the item.
+- A decided `(client_id, reason, detail)` is not re-queued next cycle; a **changed `detail`** (a new ambiguous document, or a different tier) does re-queue.
+- The dashboard's only write is the approve/dismiss decision (`decide_review_item`); every other table is read-only from here. No reopen/delete exists.
 
-## Setup
+### Verify the approve/dismiss flow
 
-1. Clone the repo and `cd` into it
-2. Copy `.env.example` to `.env` and fill in your team's LLM gateway credentials (from Slack) — never commit this file
-3. See `docs/week1_notes.md` for the checklist and escalation rules this build follows
+```
+python -m dashboard.check_decide
+```
 
-## Guardrails
+Dismisses one open item, confirms the open count drops by one and a second decision is rejected, then restores the item (clears the decision) so the data is left as found.
 
-The agent recommends and nudges only. An account manager always makes the final call on any client outreach beyond the first reminder tier, and remains responsible for any compliance-sensitive follow-up.
+## Testing
+
+Hermetic suites (in-memory sqlite / fakes + Flask test client; no live Turso, no network):
+
+```
+python -m tests.test_guardrails         # tier thresholds + hard guardrails
+python -m tests.test_pipeline           # stage order, --json shape, idempotency, gateway fallback
+python -m tests.test_timeline           # merged escalation-history timeline
+python -m tests.test_review_decisions   # approve/dismiss, re-queue suppression, notes never affect tier
+python -m tests.test_dashboard          # Basic auth, CSRF, decide route
+```
+
+## Environment variables
+
+Copy `.env.example` to `.env` and fill in:
+
+| Variable | Purpose |
+|---|---|
+| `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` | Turso (libSQL) database connection |
+| `LLM_GATEWAY_URL`, `LLM_GATEWAY_API_KEY`, `LLM_MODEL` | LLM gateway for reminder drafting (optional — falls back to templates if unset/unreachable) |
+| `DASHBOARD_USER`, `DASHBOARD_AUTH_TOKEN` | Dashboard Basic-auth login (token required to serve the dashboard) |
+| `DASHBOARD_SECRET_KEY` | Signs the session cookie used for CSRF (set a long random string) |
+| `APP_ENV` | Environment label (default `development`) |
+| `AWS_*`, `OPENROUTER_API_KEY` | Present for planned deployment / alternatives; not read by current code |
+
+## Guardrails (product framing)
+
+The agent recommends and nudges only, through Tier 2. An account manager always makes the final call on any client outreach beyond that, and remains responsible for any compliance-sensitive follow-up.
+
+## Known limitations
+
+**Functional**
+- **No OCR / no field extraction** — `completeness.py` only checks whether a PDF yields text; scanned/photographed pages are flagged `ambiguous`, not read.
+- **No real delivery** — reminders are logged by `_send_stub`, not sent by email/WhatsApp.
+- **`days_since_first_request` is a CSV snapshot**, not computed from a live clock, so tiering is only as fresh as the input data.
+- **Synthetic data only** — runs against `data/synthetic_clients.csv` (20 clients); no real upload ingestion.
+- **Single shared dashboard login**, no per-user accounts or roles; `decided_by` records that one username.
+- **Manager actions are limited** to approve/dismiss with a note — no reopen, delete, or record editing.
+- **OpenClaw orchestration and AWS Lightsail hosting are not implemented** — named as the intended stack only.
+
+**Security / robustness**
+- **Basic auth over plain HTTP** on Flask's dev server — safe on localhost only; production needs TLS and a real WSGI server.
+- **Secret-key fallback** — if `DASHBOARD_SECRET_KEY` is unset, a random key is generated per process, so sessions/CSRF break across restarts or multiple workers.
+- **Client PII + message text are logged** by `_send_stub` (contact channel, email/id, full reminder text) at INFO to stderr.
+- **No explicit DB indexes** on `reminder_log` / `review_queue` (fine at this scale, not beyond).
+- **Dependencies are unpinned** (`>=` floors) in `requirements.txt` — not reproducible builds.
 
 ## Team Bob
 
 Team code: 0VHPNQUI
 
-Members: 
+Members:
 - Goh An Jun
 - Lee Ying Xuan
 - Loh Kok Hao
