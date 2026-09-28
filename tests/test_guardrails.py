@@ -38,10 +38,23 @@ class FakeStorage:
     def upsert_document(self, client_id, label, status, file_path=None):
         self.documents.append((client_id, label, status, file_path))
 
-    def log_reminder(self, client_id, tier, message_text):
-        self.reminders.append((client_id, tier, message_text))
+    def has_open_review_item(self, client_id):
+        return any(rq[0] == client_id for rq in self.review_queue)
 
-    def add_to_review_queue(self, client_id, reason):
+    def reminder_exists(self, client_id, tier):
+        return any(r[0] == client_id and r[1] == tier for r in self.reminders)
+
+    def log_reminder_once(self, client_id, tier, message_text, source=None):
+        # Mirror the real idempotency: one row per (client_id, tier).
+        if any(r[0] == client_id and r[1] == tier for r in self.reminders):
+            return False
+        self.reminders.append((client_id, tier, message_text, source))
+        return True
+
+    def add_to_review_queue(self, client_id, reason, detail=None):
+        # Idempotent for open items, like the real Storage.
+        if (client_id, reason) in [(c, r) for c, r in self.review_queue]:
+            return
         self.review_queue.append((client_id, reason))
 
 
@@ -64,9 +77,10 @@ def _client(**kw) -> Client:
     return Client(**base)
 
 
-def _patch_completeness(monkey_result):
-    """Replace check_completeness with one returning a fixed status map."""
-    agent.check_completeness = lambda client, storage: monkey_result
+def _patch_completeness(status_map):
+    """Force stage 2 to return {label: (status, file_path)} with no writes."""
+    shaped = {label: (status, None) for label, status in status_map.items()}
+    agent.check_completeness = lambda client: shaped
 
 
 results = []
@@ -89,9 +103,9 @@ def main() -> int:
     check("5 reminders -> tier 3", get_tier(7, 5) == 3)
 
     print("\ndraft_reminder guardrail:")
-    check("tier 3 returns None", draft_reminder(_client(), 3) is None)
-    check("tier 0 returns a string", isinstance(draft_reminder(_client(), 0), str))
-    check("tier 2 returns a string", isinstance(draft_reminder(_client(), 2), str))
+    check("tier 3 text is None", draft_reminder(_client(), 3).text is None)
+    check("tier 0 text is a string", isinstance(draft_reminder(_client(), 0).text, str))
+    check("tier 2 text is a string", isinstance(draft_reminder(_client(), 2).text, str))
 
     print("\nprocess_client: Tier 3 escalation (no client message):")
     _patch_completeness({"Bank statement": "missing"})

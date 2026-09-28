@@ -1,17 +1,24 @@
-"""Phase 2 runner + eyeball verification.
+"""Phase 2 runner.
 
-Runs run_cycle() against all 20 clients, prints a summary table
-(client_id, tier, action taken, missing docs), and cross-checks the
-results against the CSV's own submission_status and missing_documents
-columns so correctness can be verified by eye.
+Default mode: runs run_cycle() against all 20 clients, prints a human
+summary table plus a cross-check against the CSV's own submission_status
+and missing_documents columns.
+
+--json mode: prints ONE JSON object per client to stdout and nothing else;
+all logs are routed to stderr. Each object has:
+    client_id, missing_docs, tier, action (none|remind|escalate_to_human),
+    reason
 
 Usage:
-    python run_cycle.py
+    python run_cycle.py           # human table (default)
+    python run_cycle.py --json    # one JSON object per client on stdout
 
 Requires Turso credentials in .env (TURSO_DATABASE_URL, TURSO_AUTH_TOKEN).
 """
 from __future__ import annotations
 
+import argparse
+import json
 import logging
 import sys
 
@@ -26,21 +33,26 @@ def _fmt_list(items):
     return ", ".join(items) if items else "-"
 
 
-def main() -> int:
+def _configure_logging(json_mode: bool) -> None:
+    """Logs always go to stderr. In JSON mode stdout is reserved for JSON."""
     logging.basicConfig(
         level=logging.INFO,
-        format="%(message)s",
-        stream=sys.stdout,
+        format="%(message)s" if not json_mode else "%(levelname)s %(name)s: %(message)s",
+        stream=sys.stderr,
     )
 
-    if not config.turso_configured():
-        print(
-            "ERROR: Turso is not configured. Set TURSO_DATABASE_URL and "
-            "TURSO_AUTH_TOKEN in .env.",
-            file=sys.stderr,
-        )
-        return 1
 
+def _run_json() -> int:
+    """Emit one JSON object per client on stdout; logs already go to stderr."""
+    with Storage() as storage:
+        results = run_cycle(storage)
+        for r in results:
+            # One compact JSON object per line (stdout only).
+            sys.stdout.write(json.dumps(r.to_json_dict()) + "\n")
+    return 0
+
+
+def _run_human() -> int:
     # Ground-truth lookup from the CSV for verification.
     csv_clients = {c.client_id: c for c in read_clients_csv()}
 
@@ -75,7 +87,6 @@ def main() -> int:
             expected_tier = get_tier(c.days_since_first_request, c.reminders_sent)
             tier_ok = expected_tier == r.tier
 
-            # Compare detected missing set with CSV missing set.
             detected = set(m.strip() for m in r.missing_documents)
             expected_missing = set(m.strip() for m in c.missing_documents)
             missing_ok = detected == expected_missing
@@ -128,6 +139,29 @@ def main() -> int:
         print("=" * 92 + "\n")
 
     return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Run one document-collection cycle.")
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit one JSON object per client on stdout (logs go to stderr).",
+    )
+    args = parser.parse_args()
+
+    _configure_logging(args.json)
+
+    if not config.turso_configured():
+        # Error to stderr in both modes so stdout stays clean in JSON mode.
+        print(
+            "ERROR: Turso is not configured. Set TURSO_DATABASE_URL and "
+            "TURSO_AUTH_TOKEN in .env.",
+            file=sys.stderr,
+        )
+        return 1
+
+    return _run_json() if args.json else _run_human()
 
 
 if __name__ == "__main__":

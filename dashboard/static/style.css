@@ -103,17 +103,31 @@ tr.attention:hover { background: #fff1db; }
   font-weight: 600;
 }
 
-.btn-resolve {
+.decide-form {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.note-input {
+  padding: 0.3rem 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 0.82rem;
+  min-width: 8rem;
+}
+.btn-approve, .btn-dismiss {
   cursor: pointer;
-  border: 1px solid var(--brand);
-  background: var(--brand);
-  color: #fff;
   padding: 0.35rem 0.7rem;
   border-radius: 6px;
   font-size: 0.82rem;
+  border: 1px solid transparent;
 }
-.btn-resolve:hover { background: #275c41; }
-.btn-resolve:focus { outline: 2px solid #123; outline-offset: 2px; }
+.btn-approve { background: var(--brand); color: #fff; border-color: var(--brand); }
+.btn-approve:hover { background: #275c41; }
+.btn-dismiss { background: #fff; color: #b22730; border-color: #e3a3a3; }
+.btn-dismiss:hover { background: #fbeaea; }
+.btn-approve:focus, .btn-dismiss:focus { outline: 2px solid #123; outline-offset: 2px; }
 
 .empty {
   background: #fff;
@@ -133,3 +147,41 @@ a { color: var(--brand); }
   color: var(--muted);
   font-size: 0.82rem;
 }
+
+/* --- Escalation-history timeline badges --------------------------------- */
+.badge {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.badge-reminder   { background: #eaf1fb; color: #2a5bb0; }
+.badge-escalation { background: #fce4e4; color: #b22730; border-color: #f2b8b8; }
+.badge-ambiguous  { background: #fdf0d9; color: #a86a12; }
+
+.source {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  color: #444;
+}
+.source-legacy { color: #8a8f94; font-style: italic; }
+
+.status {
+  display: inline-block;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+.status-open      { background: #fdf0d9; color: #a86a12; }
+.status-resolved  { background: #eef1f3; color: #5b6570; }
+.status-approved  { background: #e7f4ed; color: #1d6b45; }
+.status-dismissed { background: #f0eef6; color: #6b4fa0; }
+
+.decided-meta { font-size: 0.74rem; color: #8a8f94; margin-top: 0.2rem; }
+.decided-note { font-size: 0.8rem; color: #444; margin-top: 0.2rem; }
+
+.muted { color: #a2a8ad; }

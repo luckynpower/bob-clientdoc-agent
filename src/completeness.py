@@ -1,8 +1,9 @@
-"""Document completeness checking.
+"""Text extraction + completeness checking.
 
 For a given client we compare the required-document checklist against the
 PDFs that actually exist on disk, parsing each present PDF with pdfplumber
-(plain-text extraction only — no OCR, per the stated limitation).
+(plain-text extraction only — a text-presence check, no OCR and no field
+extraction, per the stated limitation).
 
 Per required document, the resulting status is one of:
   submitted  — a matching PDF exists and yields readable text
@@ -18,13 +19,12 @@ from __future__ import annotations
 import csv
 import re
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import pdfplumber
 
 from . import config
 from .clients import Client
-from .storage import Storage
 
 STATUS_SUBMITTED = "submitted"
 STATUS_MISSING = "missing"
@@ -81,6 +81,19 @@ def _load_manifest() -> Dict[str, List[Tuple[str, str]]]:
 _MANIFEST = _load_manifest()
 
 
+def load_manifest(force_reload: bool = False) -> Dict[str, List[Tuple[str, str]]]:
+    """Public accessor for the uploaded-document index (client_id -> files).
+
+    Cached after first load. `force_reload=True` re-reads _manifest.csv from
+    disk (useful if files changed between runs); the cached copy is what the
+    completeness check consults per client.
+    """
+    global _MANIFEST
+    if force_reload:
+        _MANIFEST = _load_manifest()
+    return _MANIFEST
+
+
 def _pdf_has_text(path: str) -> bool:
     """True if pdfplumber extracts non-trivial text from the PDF.
 
@@ -116,37 +129,31 @@ def _find_file_for_required(
     return None
 
 
-def check_completeness(client: Client, storage: Storage) -> Dict[str, str]:
-    """Check one client's documents and persist per-document statuses.
+def check_completeness(client: Client) -> Dict[str, Tuple[str, Optional[str]]]:
+    """Extract text + compare against the required list. Does NOT write to DB.
 
-    Returns {document_label: status} for the client's required documents.
+    Returns {document_label: (status, file_path)} for the client's required
+    documents. Persisting these statuses to the `documents` table is a
+    separate stage (see agent.update_checklist), so this stage is pure
+    text-extraction + completeness with no side effects on storage.
     """
     submitted = _MANIFEST.get(client.client_id, [])
-    results: Dict[str, str] = {}
+    results: Dict[str, Tuple[str, Optional[str]]] = {}
 
     for required in client.required_documents:
         if not _is_collectible(required):
             # Derived summary (e.g. GST input/output) — recorded as required
             # but not counted as a collectible file, matching the dataset.
-            results[required] = STATUS_NOT_TRACKED
-            storage.upsert_document(
-                client.client_id, required, STATUS_NOT_TRACKED, None
-            )
+            results[required] = (STATUS_NOT_TRACKED, None)
             continue
 
         path = _find_file_for_required(required, submitted)
         if path is None or not Path(path).exists():
-            status = STATUS_MISSING
-            file_path = None
+            results[required] = (STATUS_MISSING, None)
         elif _pdf_has_text(path):
-            status = STATUS_SUBMITTED
-            file_path = path
+            results[required] = (STATUS_SUBMITTED, path)
         else:
             # File exists but we can't read/verify it -> route to a human.
-            status = STATUS_AMBIGUOUS
-            file_path = path
-
-        results[required] = status
-        storage.upsert_document(client.client_id, required, status, file_path)
+            results[required] = (STATUS_AMBIGUOUS, path)
 
     return results
