@@ -138,18 +138,26 @@ def _call_gateway(prompt: str) -> Optional[str]:
         logger.warning("LLM gateway not configured; using template fallback.")
         return None
 
+    base_url = config.LLM_GATEWAY_URL.rstrip("/")
+    endpoint = (
+        base_url
+        if base_url.endswith("/api/chat")
+        else f"{base_url}/api/chat"
+    )
+
     payload = {
-        "model": config.LLM_MODEL or "claude",
+        "model": config.LLM_MODEL,
         "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 300,
+        "stream": False,
+        "options": {"max_predict": 300},
     }
     body = json.dumps(payload).encode("utf-8")
     headers = {"Content-Type": "application/json"}
     if config.LLM_GATEWAY_API_KEY:
-        headers["Authorization"] = f"Bearer {config.LLM_GATEWAY_API_KEY}"
+        headers["X-API-Key"] = config.LLM_GATEWAY_API_KEY
 
     req = urllib_request.Request(
-        config.LLM_GATEWAY_URL, data=body, headers=headers, method="POST"
+        endpoint, data=body, headers=headers, method="POST"
     )
     try:
         with urllib_request.urlopen(req, timeout=_HTTP_TIMEOUT_SECONDS) as resp:
@@ -171,6 +179,15 @@ def _extract_text(raw: str) -> Optional[str]:
         data = json.loads(raw)
     except (json.JSONDecodeError, TypeError):
         return None
+    # Ollama /api/chat response
+    try:
+        message = data.get("message")
+        if isinstance(message, dict):
+            content = message.get("content")
+            if isinstance(content, str) and content.strip():
+                return content
+    except (AttributeError, TypeError):
+        pass
     # OpenAI/Bedrock-proxy style: choices[0].message.content
     try:
         choices = data.get("choices")
