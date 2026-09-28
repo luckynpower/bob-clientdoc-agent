@@ -21,8 +21,8 @@ An agent-driven assistant that tracks each client's required-document checklist 
 | PDF parsing | pdfplumber (text extraction, no OCR) | in use |
 | Reminder drafting | LLM gateway (Bedrock/Claude proxy) with template fallback | in use |
 | Dashboard | Flask + Jinja2 (server-rendered) | in use |
-| Agent orchestration | OpenClaw | planned — not yet wired in code |
-| Hosting / deployment | AWS Lightsail | planned — not yet wired in code |
+| Agent orchestration | OpenClaw | in use — runs the full cycle (see below) |
+| Hosting / deployment | AWS Lightsail | in use — hosts the app + OpenClaw agent |
 
 ## Repository Structure
 
@@ -101,9 +101,19 @@ The LLM (via `reminders.draft_reminder` → the gateway) drafts reminder *wordin
 
 - The GST input/output summary is a *derived* tax figure, not a client-uploaded file. It is tracked as a required line item (`not_tracked`) but excluded from the missing/submitted comparison, matching the CSV's ground truth.
 
+## Deployment & Orchestration
+
+The app runs on an **AWS Lightsail** instance, with **OpenClaw** acting as the agent orchestrator.
+
+- **OpenClaw** drives the agent by invoking `run_cycle.py`, which executes the full ordered cycle in one pass (intake → completeness → checklist update → tier/action + guardrails) and persists results to Turso. The OpenClaw agent/skill is configured on the Lightsail VPS rather than committed to this repo, so the repository itself contains no OpenClaw config.
+- **AWS Lightsail** hosts both the OpenClaw agent and the Flask dashboard. Deployment/runtime config (service definitions, environment/secrets, scheduling) lives on the instance; `.env` is gitignored and set on the server.
+- Because the dashboard and the agent communicate only through the Turso database, no code-level coupling is required between them — OpenClaw writes rows, the dashboard reads them.
+
+Not yet done: the individual cycle stages are not exposed as separate OpenClaw-callable tools; OpenClaw currently calls the whole cycle as a single unit.
+
 ## Phase 3 — Account Manager Dashboard
 
-A read-mostly Flask dashboard over the same Turso database Phase 2 populates. It never runs the agent loop, so it works the same whether the data was written by the standalone script or a future OpenClaw-hosted agent.
+A read-mostly Flask dashboard over the same Turso database Phase 2 populates. It never runs the agent loop, so it works the same whether the data was written by running the script directly or by the OpenClaw-hosted agent that invokes it.
 
 ```
 dashboard/
@@ -166,7 +176,8 @@ Copy `.env.example` to `.env` and fill in:
 | `DASHBOARD_USER`, `DASHBOARD_AUTH_TOKEN` | Dashboard Basic-auth login (token required to serve the dashboard) |
 | `DASHBOARD_SECRET_KEY` | Signs the session cookie used for CSRF (set a long random string) |
 | `APP_ENV` | Environment label (default `development`) |
-| `AWS_*`, `OPENROUTER_API_KEY` | Present for planned deployment / alternatives; not read by current code |
+| `AWS_*` | AWS credentials/region for the Lightsail deployment (configured on the VPS, not read by the application code itself) |
+| `OPENROUTER_API_KEY` | Optional bring-your-own-key LLM alternative; not read by current code |
 
 ## Guardrails (product framing)
 
@@ -181,7 +192,7 @@ The agent recommends and nudges only, through Tier 2. An account manager always 
 - **Synthetic data only** — runs against `data/synthetic_clients.csv` (20 clients); no real upload ingestion.
 - **Single shared dashboard login**, no per-user accounts or roles; `decided_by` records that one username.
 - **Manager actions are limited** to approve/dismiss with a note — no reopen, delete, or record editing.
-- **OpenClaw orchestration and AWS Lightsail hosting are not implemented** — named as the intended stack only.
+- **OpenClaw orchestration is coarse-grained** — OpenClaw invokes `run_cycle.py` as a single unit (intake → completeness → checklist → tier/action). The individual stages are not yet exposed as separate OpenClaw-callable tools. The OpenClaw agent/skill definition lives on the Lightsail VPS, not in this repo.
 
 **Security / robustness**
 - **Basic auth over plain HTTP** on Flask's dev server — safe on localhost only; production needs TLS and a real WSGI server.
