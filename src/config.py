@@ -66,7 +66,28 @@ TURSO_DATABASE_URL = _clean(os.getenv("TURSO_DATABASE_URL"))
 TURSO_AUTH_TOKEN = _clean(os.getenv("TURSO_AUTH_TOKEN"))
 APP_ENV = _clean(os.getenv("APP_ENV")) or "development"
 
+# LLM gateway (hackathon Bedrock/Claude proxy). Names match .env.example.
+LLM_GATEWAY_URL = _clean(os.getenv("LLM_GATEWAY_URL"))
+LLM_GATEWAY_API_KEY = _clean(os.getenv("LLM_GATEWAY_API_KEY"))
+LLM_MODEL = _clean(os.getenv("LLM_MODEL"))
+
+# Dashboard auth (Phase 3). Basic auth gates the whole dashboard; the secret
+# key signs the CSRF cookie. Names match .env.example.
+DASHBOARD_USER = _clean(os.getenv("DASHBOARD_USER")) or "manager"
+DASHBOARD_AUTH_TOKEN = _clean(os.getenv("DASHBOARD_AUTH_TOKEN"))
+DASHBOARD_SECRET_KEY = _clean(os.getenv("DASHBOARD_SECRET_KEY"))
+
 
 def turso_configured() -> bool:
     """True when both Turso credentials are present."""
     return bool(TURSO_DATABASE_URL and TURSO_AUTH_TOKEN)
+
+
+def llm_gateway_configured() -> bool:
+    """True when the LLM gateway URL is set (API key may be optional)."""
+    return bool(LLM_GATEWAY_URL)
+
+
+def dashboard_auth_configured() -> bool:
+    """True when the dashboard auth token is set."""
+    return bool(DASHBOARD_AUTH_TOKEN)

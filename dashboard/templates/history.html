@@ -4,33 +4,85 @@
 {% block content %}
 <p><a href="{{ url_for('overview') }}">&larr; Back to overview</a></p>
 
-<h1>Reminder History — {{ client.client_name }}</h1>
+<h1>Escalation History — {{ client.client_name }}</h1>
 <p class="subtitle">
   <span class="mono">{{ client.client_id }}</span> · {{ client.client_type }} ·
   current status: {{ client.submission_status }} ·
   {{ client.reminders_sent }} reminder(s) recorded on the client record
 </p>
 
-{% if entries %}
+{% if timeline %}
 <table class="grid">
   <thead>
     <tr>
       <th scope="col">When</th>
+      <th scope="col">Type</th>
       <th scope="col">Tier</th>
-      <th scope="col">Message sent (logged, not delivered)</th>
+      <th scope="col">Message / reason (logged, not delivered)</th>
+      <th scope="col">Source</th>
+      <th scope="col">Status</th>
     </tr>
   </thead>
   <tbody>
-    {% for e in entries %}
+    {% for e in timeline %}
     <tr>
       <td class="mono nowrap">{{ e.timestamp }}</td>
-      <td><span class="tier tier-{{ e.tier }}">Tier {{ e.tier }}</span></td>
-      <td class="message">{{ e.message_text }}</td>
+      <td>
+        {% if e.kind == "reminder" %}
+          <span class="badge badge-reminder">{{ e.kind_label }}</span>
+        {% elif e.kind == "tier_3_escalation" %}
+          <span class="badge badge-escalation">{{ e.kind_label }}</span>
+        {% else %}
+          <span class="badge badge-ambiguous">{{ e.kind_label }}</span>
+        {% endif %}
+      </td>
+      <td>
+        {% if e.tier is not none %}
+          <span class="tier tier-{{ e.tier }}">Tier {{ e.tier }}</span>
+        {% else %}
+          <span class="muted">—</span>
+        {% endif %}
+      </td>
+      {# Message / reason. Autoescaped (no |safe): LLM output is untrusted. #}
+      <td class="message">{{ e.text }}</td>
+      <td>
+        {% if e.kind == "reminder" %}
+          {% if e.source == "legacy" %}
+            <span class="source source-legacy">legacy</span>
+          {% else %}
+            <span class="source">{{ e.source }}</span>
+          {% endif %}
+        {% else %}
+          <span class="muted">—</span>
+        {% endif %}
+      </td>
+      <td>
+        {% if e.status is none %}
+          <span class="muted">—</span>
+        {% elif e.status == "approved" %}
+          <span class="status status-approved">Approved</span>
+        {% elif e.status == "dismissed" %}
+          <span class="status status-dismissed">Dismissed</span>
+        {% elif e.status == "resolved_legacy" %}
+          <span class="status status-resolved">Resolved (legacy)</span>
+        {% else %}
+          <span class="status status-open">Open</span>
+        {% endif %}
+        {% if e.decided_by or e.decided_at %}
+          <div class="decided-meta">
+            {% if e.decided_by %}by {{ e.decided_by }}{% endif %}
+            {% if e.decided_at %}<span class="mono nowrap">{{ e.decided_at }}</span>{% endif %}
+          </div>
+        {% endif %}
+        {% if e.note %}
+          <div class="decided-note">Note: {{ e.note }}</div>
+        {% endif %}
+      </td>
     </tr>
     {% endfor %}
   </tbody>
 </table>
 {% else %}
-<p class="empty">No reminders have been logged for this client yet.</p>
+<p class="empty">No reminders or escalations have been recorded for this client yet.</p>
 {% endif %}
 {% endblock %}

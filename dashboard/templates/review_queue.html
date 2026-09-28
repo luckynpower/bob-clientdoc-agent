@@ -30,8 +30,16 @@
       <td><a href="{{ url_for('history', client_id=it.client_id) }}">View</a></td>
       <td>
         <form method="post"
-              action="{{ url_for('resolve', review_id=it.id) }}">
-          <button type="submit" class="btn-resolve">Mark resolved</button>
+              action="{{ url_for('decide', review_id=it.id) }}"
+              class="decide-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="text" name="note" class="note-input"
+                 placeholder="Optional note" maxlength="500"
+                 aria-label="Decision note for {{ it.client_id }}">
+          <button type="submit" name="decision" value="approved"
+                  class="btn-approve">Approve</button>
+          <button type="submit" name="decision" value="dismissed"
+                  class="btn-dismiss">Dismiss</button>
         </form>
       </td>
     </tr>

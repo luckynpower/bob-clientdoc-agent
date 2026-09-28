@@ -5,12 +5,13 @@ state, escalating reminder generation, automated completeness check on
 incoming documents, flagging of missing/ambiguous items.
 
 ## Assumptions
-- Reminder channel (email/WhatsApp sandbox) is available.
+- Reminder channel (email/WhatsApp sandbox) is available; delivery is still
+  stubbed (logged, not sent).
 - Escalation rules agreed in Week 1 remain stable and unchanged.
-- The hackathon's shared LLM Gateway key had not yet been received at the
-  start of this phase — LLM-dependent steps (reminder wording) are
-  implemented behind a stub function so the rest of the system can be
-  built and tested without it, and swapped for a live call once available.
+- The hackathon's shared LLM Gateway may or may not be reachable at run time.
+  `draft_reminder()` now calls the gateway when configured and falls back to
+  a per-tier template on any failure, so the loop runs identically with or
+  without live credentials.
 
 ## Technical Decisions Made This Phase
 - **Persistence:** Turso (hosted libSQL/SQLite-compatible) chosen over a
@@ -22,21 +23,69 @@ incoming documents, flagging of missing/ambiguous items.
   OCR. The synthetic test documents are clean digital PDFs; OCR for
   scanned/photographed real-world submissions is scoped as a future
   extension, not built here.
-- **LLM calls:** stubbed via `draft_reminder()`, returning templated
-  strings per escalation tier. Will be swapped for a live Bedrock/Claude
-  call once the team's LLM Gateway credentials are available — no other
-  code should need to change when that happens.
+- **LLM calls:** `draft_reminder()` calls the hackathon LLM Gateway
+  (Bedrock/Claude proxy) using `LLM_GATEWAY_URL` / `LLM_GATEWAY_API_KEY` /
+  `LLM_MODEL`. The request payload is deliberately small — only client name,
+  tier, and the missing-item list — because the gateway WAF rejects large
+  requests, and there is no need to send document contents to draft a chase
+  message. If document text is ever included, it is wrapped in an explicit
+  UNTRUSTED-DATA envelope so external text is treated as data, not
+  instructions. Any failure (not configured, unreachable, timeout, bad
+  status/shape) is logged to stderr and falls back to the per-tier template;
+  `draft_reminder()` never raises, so one bad gateway call cannot crash a run.
+
+## Pipeline Stage Order (audited)
+`run_cycle()` is one clean loop running these stages in order for every
+client:
+1. **intake** — load client records + the index of their uploaded documents
+2. **text extraction + completeness** — pdfplumber text-presence check per
+   PDF (no OCR, no field extraction), compared to the required-document list
+   (GST summary is `not_tracked`, excluded from missing checks). Pure: it
+   computes statuses and writes nothing.
+3. **update checklist** — a distinct stage that writes the stage-2 statuses to
+   the `documents` table (`agent.stage_update_checklist`). Separated from
+   stage 2 so completeness has no storage side effects.
+4. **decide reminder tier** — deterministic Python only (`tiers.get_tier`),
+   never the LLM; computed *after* completeness
+5. **decide action** — enforce guardrails and act
+
+## Idempotency
+Running the cycle twice in a row produces no duplicate rows:
+- `clients` / `documents` — upsert.
+- `review_queue` — one open row per (client_id, reason); once an item is
+  decided (approved or dismissed), the same (client_id, reason, detail) is not
+  re-queued, but a changed `detail` re-queues.
+- `reminder_log` — `log_reminder_once()` records **one reminder per
+  (client_id, tier)**. It deliberately does not key on message text (the
+  wording changes once the LLM is live). This caps client-facing reminders at
+  one per tier (0/1/2), i.e. at most 3 lifetime, consistent with the
+  "3+ reminders → Tier 3" rule (Tier 3 sends no reminder at all).
+- On a re-run, a client already reminded at its current tier reports JSON
+  action `none` with reason **"already reminded at this tier"** (not
+  `remind`), so a second run neither re-sends nor mislabels the action.
+
+## reminder_log.source
+Each reminder row records where its wording came from in a `source` column:
+`llm` (gateway produced the text) or `template_fallback` (gateway
+unconfigured/unreachable/failed, per-tier template used). The column is added
+by a safe migration — `init_schema()` runs `ALTER TABLE reminder_log ADD
+COLUMN source TEXT` only if the column is absent, so it is non-destructive on
+an existing table and existing rows simply get a NULL source.
 
 ## What Was Built
 - `load_clients()` — loads `data/synthetic_clients.csv` into Turso
+- `load_manifest()` — explicit intake of the uploaded-document index
 - `get_tier()` — pure function mapping days-since-request + reminders-sent
   to escalation Tier 0–3, per `docs/week1_notes.md`
-- `check_completeness()` — parses each client's submitted PDFs, flags
-  missing or ambiguous documents
-- `draft_reminder()` — stubbed reminder text generator, Tiers 0–2 only
-- `run_cycle()` — orchestrates the full loop across all clients; Tier 3
-  and ambiguous-document cases route to a review queue instead of an
-  automatic client-facing message
+- `check_completeness()` — text-extraction + completeness check; flags each
+  required document submitted / missing / ambiguous / not_tracked
+- `draft_reminder()` — LLM-gateway-backed reminder text, Tiers 0–2 only,
+  with safe template fallback
+- `run_cycle()` — the ordered loop across all clients; Tier 3 and
+  ambiguous-document cases route to `review_queue` instead of a client message
+- `run_cycle.py` — default human summary table; `--json` emits one JSON
+  object per client (`client_id`, `missing_docs`, `tier`,
+  `action` ∈ none/remind/escalate_to_human, `reason`) on stdout, logs on stderr
 
 ## Guardrail Confirmed
 No client-facing message is ever generated for a Tier 3 (unresponsive)
